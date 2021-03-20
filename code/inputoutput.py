@@ -19,7 +19,6 @@ def get_data(file_name):
 
 
 
-
-
 if __name__ == '__main__':
     x, y = get_data('../datasets/sarcasm_headlines_dataset.json')
+    print("")
