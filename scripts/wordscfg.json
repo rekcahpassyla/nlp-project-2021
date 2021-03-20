@@ -1,14 +1,14 @@
 {
   "train": true,
   "plot": true,
-  "co_occurrence_file": "/opt/github.com/spond/spond/experimental/glove/text8",
+  "co_occurrence_file": "/opt/github.com/nlp-project-2021/code/allheadlines.txt",
   "glove_options": {
     "words_dataset": true,
-    "embed_dim": 300,
-    "n_epochs": 5,
+    "embed_dim": 10,
+    "n_epochs": 100,
     "batch_size": 1000000,
     "x_max": 100,
     "alpha": 0.75,
-    "output_file": "glove_words"
+    "output_file": "glove_sarcasm"
   }
 }

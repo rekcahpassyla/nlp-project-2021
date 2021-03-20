@@ -8,6 +8,7 @@ import torch.nn.functional as F
 
 # specify GPU
 GPU = torch.cuda.is_available()
+GPU = False
 
 # If you have a problem with your GPU, set this to "cpu" manually
 device = torch.device("cuda:0" if GPU else "cpu")
@@ -16,7 +17,6 @@ from collections import Counter, defaultdict
 
 import numpy as np
 import torch
-
 
 
 class GloveWordsDataset:
@@ -109,7 +109,7 @@ def weight_func(x, x_max, alpha):
 
 
 def wmse_loss(weights, inputs, targets):
-    loss = weights * F.mse_loss(inputs, targets, reduction='<none')
+    loss = weights * F.mse_loss(inputs, targets, reduction='none')
     return torch.mean(loss).to(device)
 
 
@@ -154,7 +154,7 @@ if __name__ == '__main__':
     cfg = json.load(open(cfg_filename))
     glove_opts = cfg['glove_options']
     if glove_opts['words_dataset']:
-        dataset = GloveWordsDataset(open("text8").read(), 10000000, device=device)
+        dataset = GloveWordsDataset(open(cfg['co_occurrence_file']).read(), 10000000, device=device)
     else:
         dataset = GloveDataset(cfg['co_occurrence_file'], device)
 
@@ -230,7 +230,7 @@ if __name__ == '__main__':
                 tsne = TSNE(metric='cosine', n_components=2, random_state=123)
                 embeddings = tsne.fit_transform(emb[top_k_indices, :])
 
-            fig = plt.figure(figsize=(14, 14))
+            fig = plt.figure(figsize=(30, 30))
 
             for idx, concept_idx in enumerate(top_k_indices):
                 m = embeddings[idx, :]

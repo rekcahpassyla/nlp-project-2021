@@ -2,7 +2,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 
 import sys
-sys.path.append('../code')
+sys.path.append('../src')
 
 import numpy as np
 import pandas as pd
