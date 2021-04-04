@@ -34,8 +34,8 @@ for ix, _file in enumerate(files):
             )
     output = pd.DataFrame(
         result, 
-        columns = ['title', 'descriptions', 'category', 'date', 'sarcastic'])
+        columns = ['headline', 'description', 'category', 'date', 'is_sarcastic'])
 
-    output.to_json(f'datasets/{_file}.json', orient = 'columns')
+    output.to_json(f'datasets/{_file}.json', orient = 'records', lines = True)
 
 
