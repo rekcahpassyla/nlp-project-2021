@@ -5,6 +5,7 @@ import torch
 import sys
 sys.path.append('../src')
 
+import os
 import numpy as np
 import pandas as pd
 import torch
@@ -21,7 +22,6 @@ from sklearn.utils.class_weight import compute_class_weight
 
 import inputoutput as io
 
-
 #%%
 class SarcasmDataset(torch.utils.data.Dataset):
     def __init__(self, encodings, labels):
@@ -35,7 +35,6 @@ class SarcasmDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.labels)
-
 
 #%%
 def evalmodel(model, loader):
@@ -57,6 +56,7 @@ def evalmodel(model, loader):
     accuracy = (preds == labels).mean()
     return preds, labels, loss, accuracy
 
+#%%
 
 if __name__ == "__main__":
 
