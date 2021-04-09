@@ -1,9 +1,11 @@
 from nltk.tokenize import regexp_tokenize
-
+import json
+import os
 
 def parse_json(file_name):
     for line in open(file_name, 'r'):
-        yield eval(line)
+        yield json.loads(line.strip())
+        #yield eval(line)
 
 
 def tokenize(text):
@@ -20,5 +22,6 @@ def get_data(file_name):
 
 
 if __name__ == '__main__':
-    x, y = get_data('../datasets/sarcasm_headlines_dataset.json')
+    x, y = get_data(
+        os.path.join('..', 'datasets', 'sarcasm_headlines_dataset.json'))
     print("")

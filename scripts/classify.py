@@ -4,6 +4,7 @@ import torch
 import sys
 sys.path.append('../src')
 
+import os
 import numpy as np
 import pandas as pd
 import torch
@@ -28,7 +29,10 @@ device = torch.device("cuda:0" if GPU else "cpu")
 
 #device = 'cpu' #torch.device("cuda")
 
-text, labels = io.get_data('../datasets/sarcasm_headlines_dataset.json')
+# Change this to use the UK file if desired
+data_file = 'sarcasm_headlines_dataset.json'
+
+text, labels = io.get_data(os.path.join('..', 'datasets', data_file))
 
 
 # makes the splitting reproducible - I don't know which one is needed
@@ -70,8 +74,6 @@ tokenizer = AutoTokenizer.from_pretrained(bert_type)
 # so we don't need to add any of those, we can just use the output direct
 model = AutoModelForSequenceClassification.from_pretrained(bert_type)
 
-#train_text = train_text[:1000]
-#train_labels = train_labels[:1000]
 
 train_encodings = tokenizer(train_text, truncation=True, padding=True)
 val_encodings = tokenizer(val_text, truncation=True, padding=True)
@@ -108,6 +110,7 @@ epochs = 20
 
 all_loss = []
 
+# Change this to train the actual model
 train = True
 
 
@@ -130,7 +133,7 @@ def evalmodel(model, loader):
     accuracy = (preds == labels).mean()
     return preds, labels, loss, accuracy
 
-min_filename = "bert_sarcasm_train_min.pt"
+save_filename = "bert_sarcasm_train_min.pt"
 
 if train:
 
@@ -156,12 +159,15 @@ if train:
         preds, labels, vloss, accuracy = evalmodel(model, val_loader)
         if vloss < last_loss:
             last_loss = vloss
-            torch.save(model.state_dict(), min_filename)
+            torch.save(model.state_dict(), save_filename)
 
         print(f"Epoch: {epoch} Train loss: {l} "
               f"Val. loss: {vloss.cpu()} Val. acc: {accuracy}")
 
-model.load_state_dict(torch.load(min_filename))
+# Change this to load a pretrained model from a different file
+# For example if we wanted to evaluate UK sarcasm against US trained dataset
+pretrained_filename = save_filename
+model.load_state_dict(torch.load(pretrained_filename))
 
 _, _, testloss, test_acc = evalmodel(model, test_loader)
 print(f"Test loss: {testloss} Test accuracy: {test_acc}")
