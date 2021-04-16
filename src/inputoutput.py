@@ -22,26 +22,30 @@ def get_data(file_name):
 
 if __name__ == '__main__':
     x, y = get_data(
-        os.path.join('..', 'datasets', 'sarcasm_headlines_dataset.json'))
+        os.path.join('..', 'datasets', 'sarcasm_headlines_dataset_uk.json'))
     print("")
     keep = []
     extract = []
-    count = 0
+    pos = 0
+    neg = 0
+    N = 1500
     for i, (headline, label) in enumerate(zip(x, y)):
-        if count < 50:
-            if int(label) == 1:
+        if int(label) == 1:
+            if pos < N:
                 extract.append({'headline': headline, 'is_sarcastic': label})
-                count += 1
-            else:
-                keep.append({'headline': headline, 'is_sarcastic': label})
-        else:
+                pos += 1
+        elif int(label) == 0:
+            if neg < N:
+                extract.append({'headline': headline, 'is_sarcastic': label})
+                neg += 1
+        if pos == N and neg == N:
             keep.append({'headline': headline, 'is_sarcastic': label})
-    with open('extracted_us.json', 'w') as fh:
+    with open('test_set_uk.json', 'w') as fh:
         for item in extract:
             json.dump(item, fh)
             fh.write("\n")
 
-    with open('keep_us.json', 'w') as fh:
+    with open('train_set_uk.json', 'w') as fh:
         for item in keep:
             json.dump(item, fh)
             fh.write("\n")
