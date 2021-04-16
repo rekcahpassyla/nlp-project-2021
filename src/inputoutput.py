@@ -22,7 +22,7 @@ def get_data(file_name):
 
 if __name__ == '__main__':
     x, y = get_data(
-        os.path.join('..', 'datasets', 'raw_data', 'sarcasm_headlines_dataset.json'))
+        os.path.join('..', 'datasets', 'raw_data', 'sarcasm_headlines_dataset_uk.json'))
     print("")
     keep = []
     extract = []
@@ -44,12 +44,12 @@ if __name__ == '__main__':
 
         if not extracted: #pos == N and neg == N:
             keep.append({'headline': headline, 'is_sarcastic': label})
-    with open('test_set_all.json', 'w') as fh:
+    with open('test_set_uk.json', 'w') as fh:
         for item in extract:
             json.dump(item, fh)
             fh.write("\n")
 
-    with open('train_set_all.json', 'w') as fh:
+    with open('train_set_uk.json', 'w') as fh:
         for item in keep:
             json.dump(item, fh)
             fh.write("\n")
