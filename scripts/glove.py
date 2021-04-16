@@ -142,7 +142,6 @@ def train(model, dataset, n_epochs, batch_size, x_max=100, alpha=0.75,
 
             #if batch_i % 1024 == 0:
             print("Epoch: {}/{} \t Batch: {}/{} \t Loss: {}".format(e, n_epochs, batch_i, n_batches, np.mean(loss_values[-20:])))
-        print("Saving model...")
         if l < min_loss:
             min_loss = l
             torch.save(model.state_dict(), f"{output_filename}_min.pt")
@@ -172,9 +171,9 @@ if __name__ == '__main__':
     outdir = os.path.join(basepath, "embeddings")
     glove_opts = cfg['glove_options']
     for fn in files:
-        # only process text files
         if not fn.endswith(".txt"):
             continue
+        print(f"Processing: {fn}")
         inputfile = os.path.join(basepath, fn)
         outputfile = os.path.join(outdir,
                                   os.path.basename(inputfile).replace('.txt', ''))
