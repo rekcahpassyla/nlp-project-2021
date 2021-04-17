@@ -3,7 +3,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 
 import sys
-sys.path.append('../src')
+sys.path.append("../src")
 
 import os
 import numpy as np
@@ -20,6 +20,8 @@ from transformers import AdamW
 
 from sklearn.utils.class_weight import compute_class_weight
 
+from tqdm import tqdm
+
 import inputoutput as io
 
 #%%
@@ -30,7 +32,7 @@ class SarcasmDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
-        item['labels'] = torch.tensor(self.labels[idx])
+        item["labels"] = torch.tensor(self.labels[idx])
         return item
 
     def __len__(self):
@@ -43,10 +45,10 @@ def evalmodel(model, loader):
     labels = []
     for step, batch in enumerate(loader):
         with torch.no_grad():
-            input_ids = batch['input_ids'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
-            labels += batch['labels'].numpy().tolist()
-            this_labels = batch['labels'].to(device)
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            labels += batch["labels"].numpy().tolist()
+            this_labels = batch["labels"].to(device)
             outputs = model(input_ids, attention_mask=attention_mask, labels=this_labels)
             this_preds = outputs.logits.argmax(axis=1)
             preds += this_preds.cpu().numpy().tolist()
@@ -56,22 +58,16 @@ def evalmodel(model, loader):
     accuracy = (preds == labels).mean()
     return preds, labels, loss, accuracy
 
-#%%
 
-if __name__ == "__main__":
 
-    # specify GPU
-    GPU = torch.cuda.is_available()
+def bulk_eval(
+        args_pack,
+        epochs = 50):
 
-    # If you have a problem with your GPU, set this to "cpu" manually
-    device = torch.device("cuda:0" if GPU else "cpu")
+    text, labels = io.get_data("../datasets/%s" % args_pack["train_set"])
+    test_text, test_labels = io.get_data("../datasets/%s" % args_pack["test_set"])
 
-    #device = 'cpu' #torch.device("cuda")
-
-    text, labels = io.get_data('../datasets/train_set_uk.json')
-    test_text, test_labels = io.get_data('../datasets/test_set_uk.json')
-
-    # makes the splitting reproducible - I don't know which one is needed
+    # makes the splitting reproducible - I don"t know which one is needed
     # so set both
     seed = 5
     np.random.seed(seed)
@@ -98,23 +94,23 @@ if __name__ == "__main__":
     # https://huggingface.co/bert-base-uncased
     # Disorganised list of other models can be found at
     # https://huggingface.co/models?search=bert
-    # I don't know if they can all be downloaded by just changing the string there
-    bert_type = 'bert-base-uncased'
+    # I don"t know if they can all be downloaded by just changing the string there
+    bert_type = args_pack["model_name"]
 
-    # I don't know how the tokenizer matches the model type
+    # I don"t know how the tokenizer matches the model type
     # but it suggests that we have to use the correct tokenizer for
     # the model we want to use
     tokenizer = AutoTokenizer.from_pretrained(bert_type)
     # Pretrained models come with different heads.
     # AutoModelForSequenceClassification consists of Bert + dense layer + softmax
-    # so we don't need to add any of those, we can just use the output direct
+    # so we don"t need to add any of those, we can just use the output direct
     model = AutoModelForSequenceClassification.from_pretrained(bert_type)
 
     train_encodings = tokenizer(train_text, truncation=True, padding=True)
     val_encodings = tokenizer(val_text, truncation=True, padding=True)
     test_encodings = tokenizer(test_text, truncation=True, padding=True)
 
-    min_filename = "bert_sarcasm_train_min.pt"
+    min_filename = "%s_%s.pt" % (args_pack["name"], bert_type)#"bert_sarcasm_train_min.pt"
     train_dataset = SarcasmDataset(train_encodings, train_labels)
     val_dataset = SarcasmDataset(val_encodings, val_labels)
     test_dataset = SarcasmDataset(test_encodings, test_labels)
@@ -127,7 +123,7 @@ if __name__ == "__main__":
 
     optim = AdamW(model.parameters(), lr=5e-5)
 
-    epochs = 20
+    epochs = epochs
 
     all_loss = []
 
@@ -137,16 +133,16 @@ if __name__ == "__main__":
         last_loss = np.inf
 
         for epoch in range(epochs):
-            print(f'Epoch: {epoch}')
+            print(f"Epoch: {epoch}")
             for step, batch in enumerate(train_loader):
 
                 if step % 50 == 0 and not step == 0:
-                    print('  Batch {:>5,}  of  {:>5,}.'.format(step, len(train_loader)))
+                    print("  Batch {:>5,}  of  {:>5,}.".format(step, len(train_loader)))
 
                 optim.zero_grad()
-                input_ids = batch['input_ids'].to(device)
-                attention_mask = batch['attention_mask'].to(device)
-                this_labels = batch['labels'].to(device)
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+                this_labels = batch["labels"].to(device)
                 outputs = model(input_ids, attention_mask=attention_mask, labels=this_labels)
                 loss = outputs[0]
                 loss.backward()
@@ -167,3 +163,29 @@ if __name__ == "__main__":
     print(f"Test loss: {testloss} Test accuracy: {test_acc}")
 
     torch.cuda.empty_cache()
+
+#%%
+
+if __name__ == "__main__":
+    # specify GPU
+    GPU = torch.cuda.is_available()
+
+    # If you have a problem with your GPU, set this to "cpu" manually
+    device = torch.device("cuda:0" if GPU else "cpu")
+
+    #device = "cpu" #torch.device("cuda")
+    
+    model_names = ["bert-base-uncased"] # "distilbert-base-uncased"
+    names = ["uk", "us", "all"]
+    train_sets = ["train_set_uk.json", "train_set_us.json", "train_set_all.json"]
+    test_sets = ["test_set_uk.json", "test_set_us.json", "test_set_all.json"]
+    
+    args_packs = []
+    for model_name in model_names:
+        for name, train_set, test_set in zip(names, train_sets, test_sets):
+            args_packs.append({"name" : name, "train_set" : train_set, "test_set" : test_set, "model_name" : model_name})
+        
+    for args_pack in args_packs:
+        bulk_eval(
+            args_pack = args_pack,
+            epochs = 50)
