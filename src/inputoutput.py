@@ -21,27 +21,36 @@ def get_data(file_name):
 
 
 if __name__ == '__main__':
-    x, y = get_data(
-        os.path.join('..', 'datasets', 'sarcasm_headlines_dataset.json'))
-    print("")
-    keep = []
-    extract = []
-    count = 0
-    for i, (headline, label) in enumerate(zip(x, y)):
-        if count < 50:
+    paths = [
+        os.path.join('..', 'datasets', 'raw_data', 'sarcasm_headlines_dataset_uk.json'),
+        os.path.join('..', 'datasets', 'raw_data', 'sarcasm_headlines_dataset_us.json'),
+        os.path.join('..', 'datasets', 'raw_data', 'sarcasm_headlines_dataset.json'),
+        os.path.join('..', 'datasets', 'train_set_uk.json'),
+        os.path.join('..', 'datasets', 'train_set_us.json'),
+        os.path.join('..', 'datasets', 'train_set_all.json'),
+    ]
+    outdir = os.path.join('..', 'datasets', 'glove')
+    for pth in paths:
+        x, y = get_data(pth)
+        fn = os.path.basename(pth).replace('json', 'txt')
+        if fn.startswith('sarcasm_headlines_dataset'):
+            fn = fn.replace('sarcasm_headlines_dataset', 'testtrain_set')
+        # for each input file, just stick all the headlines together
+        # in one big string
+        both = []
+        pos = []
+        neg = []
+        for i, (headline, label) in enumerate(zip(x, y)):
+            headline = headline.lower()
+            tokens = headline.split(" ")
+            both += tokens
             if int(label) == 1:
-                extract.append({'headline': headline, 'is_sarcastic': label})
-                count += 1
-            else:
-                keep.append({'headline': headline, 'is_sarcastic': label})
-        else:
-            keep.append({'headline': headline, 'is_sarcastic': label})
-    with open('extracted_us.json', 'w') as fh:
-        for item in extract:
-            json.dump(item, fh)
-            fh.write("\n")
-
-    with open('keep_us.json', 'w') as fh:
-        for item in keep:
-            json.dump(item, fh)
-            fh.write("\n")
+                pos += tokens
+            elif int(label) == 0:
+                neg += tokens
+        with open(os.path.join(outdir, fn), 'w') as fh:
+            fh.write(" ".join(both))
+        with open(os.path.join(outdir, f"sarcastic_{fn}"), 'w') as fh:
+            fh.write(" ".join(pos))
+        with open(os.path.join(outdir, f"nonsarcastic_{fn}"), 'w') as fh:
+            fh.write(" ".join(neg))

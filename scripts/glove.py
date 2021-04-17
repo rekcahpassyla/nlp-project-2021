@@ -1,5 +1,7 @@
 import os
 import socket
+from copy import copy
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -140,102 +142,68 @@ def train(model, dataset, n_epochs, batch_size, x_max=100, alpha=0.75,
 
             #if batch_i % 1024 == 0:
             print("Epoch: {}/{} \t Batch: {}/{} \t Loss: {}".format(e, n_epochs, batch_i, n_batches, np.mean(loss_values[-20:])))
-        print("Saving model...")
         if l < min_loss:
             min_loss = l
             torch.save(model.state_dict(), f"{output_filename}_min.pt")
-        torch.save(model.state_dict(), f"{output_filename}.pt")
+        #torch.save(model.state_dict(), f"{output_filename}.pt")
 
 
 if __name__ == '__main__':
-    import sys
-    import json
-    cfg_filename = sys.argv[1]
-    cfg = json.load(open(cfg_filename))
+    import os
+    cfg = {
+        "train": True,
+        "plot": True,
+        "co_occurrence_file": None,
+        "glove_options": {
+            "words_dataset": True,
+            # I tried various values; only got good clustering with 3-5
+            "embed_dim": 3,
+            "n_epochs": 100,
+            "batch_size": 1000000,
+            "x_max": 100,
+            "alpha": 0.75,
+            "output_file": None
+        }
+    }
+    # just run for all the text files in the datasets/glove directory
+    basepath = os.path.abspath(os.path.join("..", "datasets", "glove"))
+    files = os.listdir(basepath)
+    outdir = os.path.join(basepath, "embeddings")
     glove_opts = cfg['glove_options']
-    if glove_opts['words_dataset']:
-        dataset = GloveWordsDataset(open(cfg['co_occurrence_file']).read(), 10000000, device=device)
-    else:
-        dataset = GloveDataset(cfg['co_occurrence_file'], device)
+    for fn in files:
+        if not fn.endswith(".txt"):
+            continue
+        print(f"Processing: {fn}")
+        inputfile = os.path.join(basepath, fn)
+        outputfile = os.path.join(outdir,
+                                  os.path.basename(inputfile).replace('.txt', ''))
+        dataset = GloveWordsDataset(open(inputfile).read(), 10000000, device=device)
+        glove = GloveModel(dataset.concept_len, glove_opts['embed_dim']).to(device)
+        if cfg['train']:
+            train(glove, dataset, glove_opts['n_epochs'], glove_opts['batch_size'],
+                  glove_opts['x_max'], glove_opts['alpha'],
+                  outputfile)
+        else:
+            kws = {}
+            if device == 'cpu':
+                kws['map_location'] = device
+            glove.load_state_dict(
+                torch.load(f"{outputfile}_min.pt", **kws))
+        # plotting is auxiliary so not in a function yet
+        if cfg['plot']:
+            import matplotlib.pyplot as plt
+            from sklearn.manifold import TSNE
 
-    glove = GloveModel(dataset.concept_len, cfg['glove_options']['embed_dim']).to(device)
-
-    if cfg['train']:
-        train(glove, dataset, glove_opts['n_epochs'], glove_opts['batch_size'],
-              glove_opts['x_max'], glove_opts['alpha'],
-              glove_opts['output_file'])
-    else:
-        kws = {}
-        if device == 'cpu':
-            kws['map_location'] = device
-        glove.load_state_dict(
-            torch.load(f"{glove_opts['output_file']}_min.pt", **kws))
-    # plotting is auxiliary so not in a function yet
-    if cfg['plot']:
-        import matplotlib.pyplot as plt
-        from sklearn.manifold import TSNE
-
-        if glove_opts['words_dataset']:
             emb_i = glove.wi.weight.cpu().data.numpy()
             emb_j = glove.wj.weight.cpu().data.numpy()
             emb = emb_i + emb_j
-            top_k = 300
+            top_k = 500
             tsne = TSNE(metric='cosine', random_state=123)
             embed_tsne = tsne.fit_transform(emb[:top_k, :])
-            fig, ax = plt.subplots(figsize=(14, 14))
+            fig, ax = plt.subplots(figsize=(30, 30))
             for idx in range(top_k):
                 plt.scatter(*embed_tsne[idx, :], color='steelblue')
                 plt.annotate(dataset._id2word[idx],
                              (embed_tsne[idx, 0], embed_tsne[idx, 1]),
                              alpha=0.7)
-            plt.savefig('glove_words.png')
-        else:
-            # Download from https://storage.googleapis.com/openimages/v6/oidv6-class-descriptions.csv
-            #labelsfn = 'oidv6-class-descriptions.csv'
-
-            import sys
-
-            if hostname == 'tempoyak':
-                ppath = '/opt/github.com/spond/spond/experimental'
-            else:
-                ppath = '/home/petra/spond/spond/experimental'
-            labelsfn = cfg['labels_file']
-            sys.path.append(ppath)
-
-            TOP_K = 500
-            from openimage.readfile import readlabels
-
-            labels, names = readlabels(labelsfn, rootdir=None)
-            idx_to_name = {
-                v: names[k] for k, v in labels.items()
-            }
-
-            emb_i = glove.wi.weight.data.numpy()
-            emb_j = glove.wj.weight.data.numpy()
-            emb = emb_i + emb_j
-            # find the most commonly co-occuring items
-            # These are the items which appear the most times
-            dense = dataset.cooc_mat.to_dense()
-            incidences = dense.sum(axis=0)
-            nonzero = np.nonzero(incidences)
-            nonzero_incidences = incidences[nonzero]
-            indexes = np.argsort(nonzero_incidences.t()).squeeze()
-            top_k = min(TOP_K, indexes.shape[0])
-            top_k_indices = nonzero[indexes[-top_k:]].t().squeeze()
-
-            if glove_opts['embed_dim'] == 2:
-                embeddings = emb[top_k_indices, :]
-            else:
-
-                tsne = TSNE(metric='cosine', n_components=2, random_state=123)
-                embeddings = tsne.fit_transform(emb[top_k_indices, :])
-
-            fig = plt.figure(figsize=(30, 30))
-
-            for idx, concept_idx in enumerate(top_k_indices):
-                m = embeddings[idx, :]
-                plt.scatter(*m, color='steelblue')
-                concept = idx_to_name[concept_idx.item()]
-                plt.annotate(concept, (embeddings[idx, 0], embeddings[idx, 1]),
-                             alpha=0.7)
-            plt.savefig(f"{glove_opts['output_file']}.png")
+            plt.savefig(f'{outputfile}.png')
