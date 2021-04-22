@@ -104,7 +104,7 @@ def bulk_eval(
     test_encodings = tokenizer(test_text, truncation=True, padding=True)
 
     min_filename = "%s_%s.pt" % (args_pack["name"], bert_type)
-    if results_dir is not None:
+    if results_dir is not None and not train:
         min_filename = os.path.join(results_dir, min_filename)
     train_dataset = SarcasmDataset(train_encodings, train_labels)
     val_dataset = SarcasmDataset(val_encodings, val_labels)
