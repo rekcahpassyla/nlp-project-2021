@@ -47,7 +47,7 @@ class Record:
         return self.data[unmatched]
 
 
-def process_results(filename='../results2/results.hdf5'):
+def process_results(filename='../results/results.hdf5'):
     # parses the input file and returns structures of processed results and
     # dataframes
     store = pd.HDFStore(filename, 'r')
