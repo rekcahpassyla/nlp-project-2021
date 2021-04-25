@@ -3,14 +3,13 @@
 # into sensible structures.
 
 import sys
-sys.path.append('')
+sys.path.append('..')
 
 import os
 import pandas as pd
 import numpy as np
 
 import inputoutput as io
-
 
 
 class Record:
@@ -52,14 +51,14 @@ def process_results(filename='../results/results.hdf5'):
     # dataframes
     store = pd.HDFStore(filename, 'r')
 
-    # These are pd.DataFrames whose index (rows) are the model and training set
+    # These are pd.DataFrames whose columns are the model and training set
     # eg. 'uk_bert-base-uncased' means that this is the bert-base-uncased model
     # trained on the UK dataset.
-    # The DataFrame columns are the test set eg. 'new_test_set' means that
+    # The DataFrame rows are the test set eg. 'new_test_set' means that
     # this column corresponds to running all the models in the index on
     # new_test_set.json
-    losses = store['losses'].unstack()
-    accuracies = store['accuracies'].unstack()
+    losses = store['losses'].unstack().T
+    accuracies = store['accuracies'].unstack().T
 
     # These are DataFrames whose columns are a multi-index denoting model+training set
     # and test set.
@@ -83,8 +82,10 @@ def process_results(filename='../results/results.hdf5'):
                         p[column].dropna().values, labels.values,
                         data)
         results[trained_model][test_set] = record
-        assert np.allclose(record.accuracy(), accuracies[test_set][trained_model])
+        assert np.allclose(record.accuracy(), accuracies[trained_model][test_set])
 
     return results, losses, accuracies
 
 
+if __name__ == '__main__':
+    records, losses, accuracies = process_results('../results/results.hdf5')
