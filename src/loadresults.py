@@ -11,8 +11,33 @@ import numpy as np
 
 import inputoutput as io
 
+# translate our tags to pretty names
+names = {
+    'bert-base-uncased': 'BERT-base',
+    'distilbert-base-uncased': 'DistilBERT',
+    'uk': 'UK',
+    'us': 'US',
+    'all': 'Combined',
+}
+
+
+def gen_model_name(modelname):
+    # convert us_bert-base-uncaed to BERT-base/US training set
+    loc, model = modelname.split("_")
+    return f"{names[model]}/{names[loc]}"
+
+
+def gen_test_setname(testfile):
+    # convert test_set_all to Combined test set
+    if testfile == 'new_test_set':
+        return 'Adversarial'
+    loc = testfile.split("_")[-1]
+    return names[loc]
+
 
 class Record:
+    dps = 3   # number of decimal places to round to
+
     def __init__(self, modelname, trainingset, predictions, labels, data):
         # eg. uk_bert-base-cased
         self.modelname = modelname
@@ -27,6 +52,19 @@ class Record:
         # the data and labels comes from the file name represented by trainingset
         self.labels = labels
         self.data = np.array(data)
+
+    @property
+    def N(self):
+        # return number of predictions
+        return len(self.predictions)
+
+    @property
+    def Npos(self):
+        return self.labels[self.labels==1].size
+
+    @property
+    def Nneg(self):
+        return self.labels[self.labels==0].size
 
     def accuracy(self):
         return (self.predictions == self.labels).mean()
@@ -44,6 +82,49 @@ class Record:
             unmatched = unmatched & (self.labels == 0)
 
         return self.data[unmatched]
+
+    def positives(self, _type=True):
+        # items classified as positive, true or false according to type
+        if _type:
+            pos = (
+                (self.labels == 1) &
+                (self.predictions == 1)
+            )
+        else:
+            pos = (
+                    (self.labels == 0) &
+                    (self.predictions == 1)
+            )
+        return np.nonzero(pos)[0].size
+
+    def negatives(self, _type=True):
+        # items classified as negatives, true or false according to type
+        if _type:
+            neg = (
+                    (self.labels == 0) &
+                    (self.predictions == 0)
+            )
+        else:
+            neg = (
+                    (self.labels == 1) &
+                    (self.predictions == 0)
+            )
+        return np.nonzero(neg)[0].size
+
+    @property
+    def precision(self):
+        # true positives / (true positives + false positives)
+        return np.round(self.positives(True) / (self.positives(True) + self.positives(False)), self.dps)
+
+    @property
+    def recall(self):
+        # true positives / (true positives + false negatives)
+        return np.round(self.positives(True) / (self.positives(True) + self.negatives(False)), self.dps)
+
+    @property
+    def specificity(self):
+        # true negatives / (true negatives + false positives)
+        return np.round(self.negatives(True) / (self.negatives(True) + self.positives(False)), self.dps)
 
 
 def process_results(filename='../results/results.hdf5'):
@@ -89,3 +170,57 @@ def process_results(filename='../results/results.hdf5'):
 
 if __name__ == '__main__':
     records, losses, accuracies = process_results('../results/results.hdf5')
+
+    # sanity checks
+    r = records['us_bert-base-uncased']['test_set_us']
+    # by construction this dataset has 1500 positive, 1500 negative examples
+    assert r.labels[r.labels==0].size == r.negatives(True) + r.misclassified(label=0).size
+    assert r.labels[r.labels==1].size == r.positives(True) + r.misclassified(label=1).size
+    assert r.positives(False) == r.misclassified(label=0).size
+    assert r.negatives(False) == r.misclassified(label=1).size
+
+    # build data structure holding misclassifications for labels 0 and 1
+
+    tags = {0: 'not sarcastic', 1:'sarcastic'}
+    trained_models = [
+        'BERT-base/UK',
+        'BERT-base/US',
+        'BERT-base/Combined',
+        'DistilBERT/UK',
+        'DistilBERT/US',
+        'DistilBERT/Combined',
+    ]
+    test_sets = ['UK', 'US', 'Combined', 'Adversarial']
+    sort_order = [(a1, a2) for a1 in trained_models for a2 in test_sets ]
+    counts = {}
+    stats = {}
+    fps = {}
+    for trained_model in records:
+        for test_set in records[trained_model]:
+            key = (gen_model_name(trained_model), gen_test_setname(test_set))
+            record = records[trained_model][test_set]
+            data = pd.Series({
+                tags[label]: len(record.misclassified(label=label))
+                for label in (0, 1)
+            })
+            counts[key] = data
+            data = pd.Series({
+                'precision': record.precision,
+                'recall': record.recall,
+                'specificity': record.specificity
+            })
+            stats[key] = data
+            data = pd.Series(data=[
+                record.positives(True) / record.Npos,
+                record.positives(False) / record.Nneg,
+                record.negatives(True) / record.Nneg,
+                record.negatives(False) / record.Npos,
+            ],
+            index=['True positives', 'False positives', 'True negatives', 'False negatives']
+            )
+            fps[key] = data
+    counts = pd.DataFrame(counts).T.reindex(sort_order)
+    stats = pd.DataFrame(stats).T.reindex(sort_order)
+    fps = pd.DataFrame(fps).T.reindex(sort_order)
+    fps = np.round(fps, 3)
+
