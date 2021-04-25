@@ -210,13 +210,17 @@ if __name__ == '__main__':
                 'specificity': record.specificity
             })
             stats[key] = data
+            tp = record.positives(True)
+            fp = record.positives(False)
+            tn = record.negatives(True)
+            fn = record.negatives(False)
             data = pd.Series(data=[
-                record.positives(True) / record.Npos,
-                record.positives(False) / record.Nneg,
-                record.negatives(True) / record.Nneg,
-                record.negatives(False) / record.Npos,
+                fp/(fp+tn),
+                fn/(fn+tp),
+                tp/(tp+fn),
+                tn/(tn+fp),
             ],
-            index=['True positives', 'False positives', 'True negatives', 'False negatives']
+            index=['False positives', 'False negatives', 'True positives', 'True negatives']
             )
             fps[key] = data
     counts = pd.DataFrame(counts).T.reindex(sort_order)
