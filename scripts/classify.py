@@ -62,7 +62,7 @@ def evalmodel(model, loader):
 
 def bulk_eval(
         args_pack,
-        epochs = 50):
+        epochs = 50, train = True, results_dir = None):
 
     text, labels = io.get_data("../datasets/%s" % args_pack["train_set"])
     test_text, test_labels = io.get_data("../datasets/%s" % args_pack["test_set"])
@@ -74,19 +74,12 @@ def bulk_eval(
     torch.manual_seed(seed)
 
     # split train dataset into train and validation
-    # Not sure if setting random seed as above is enough to
-    # make the split reproducible
+    # train_test_split is deterministic if the random_state is set as below
     train_text, val_text, train_labels, val_labels = train_test_split(
         text, labels,
         random_state=1,
         test_size=0.3,
         stratify=labels)
-
-    #val_text, test_text, val_labels, test_labels = train_test_split(
-    #    temp_text, temp_labels,
-    #    random_state=1,
-    #    test_size=0.5,
-    #    stratify=temp_labels)
 
     # This string selects the kind of bert model that is used
     # All of them have a Huggingface docs page that says what it is
@@ -110,16 +103,17 @@ def bulk_eval(
     val_encodings = tokenizer(val_text, truncation=True, padding=True)
     test_encodings = tokenizer(test_text, truncation=True, padding=True)
 
-    min_filename = "%s_%s.pt" % (args_pack["name"], bert_type)#"bert_sarcasm_train_min.pt"
+    min_filename = "%s_%s.pt" % (args_pack["name"], bert_type)
+    if results_dir is not None and not train:
+        min_filename = os.path.join(results_dir, min_filename)
     train_dataset = SarcasmDataset(train_encodings, train_labels)
     val_dataset = SarcasmDataset(val_encodings, val_labels)
     test_dataset = SarcasmDataset(test_encodings, test_labels)
 
     model.to(device)
 
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=32, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=True)
+    # we do not care about shuffling the order of the test data.
+    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
     optim = AdamW(model.parameters(), lr=5e-5)
 
@@ -127,11 +121,11 @@ def bulk_eval(
 
     all_loss = []
 
-    train = True
-
     if train:
-        last_loss = np.inf
+        train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=32, shuffle=True)
 
+        last_loss = np.inf
         for epoch in range(epochs):
             print(f"Epoch: {epoch}")
             for step, batch in enumerate(train_loader):
@@ -156,13 +150,19 @@ def bulk_eval(
 
             print(f"Epoch: {epoch} Train loss: {l} "
                   f"Val. loss: {vloss.cpu()} Val. acc: {accuracy}")
+    kws = {}
+    if device == 'cpu':
+        kws['map_location'] = device
 
-    model.load_state_dict(torch.load(min_filename))
+    model.load_state_dict(torch.load(min_filename, **kws))
 
-    _, _, testloss, test_acc = evalmodel(model, test_loader)
+    actual, expected, testloss, test_acc = evalmodel(model, test_loader)
+    if not train:
+        print(f"Evaluating model {bert_type} from {min_filename} with test set {args_pack['test_set']}")
     print(f"Test loss: {testloss} Test accuracy: {test_acc}")
 
     torch.cuda.empty_cache()
+    return actual, expected, testloss, test_acc
 
 #%%
 
@@ -173,19 +173,76 @@ if __name__ == "__main__":
     # If you have a problem with your GPU, set this to "cpu" manually
     device = torch.device("cuda:0" if GPU else "cpu")
 
-    #device = "cpu" #torch.device("cuda")
-    
-    model_names = ["bert-base-uncased"] # "distilbert-base-uncased"
-    names = ["uk", "us", "all"]
-    train_sets = ["train_set_uk.json", "train_set_us.json", "train_set_all.json"]
-    test_sets = ["test_set_uk.json", "test_set_us.json", "test_set_all.json"]
-    
+    device = "cpu"
+
+    TRAIN = False
+
+    model_names = ["bert-base-uncased",
+                   "distilbert-base-uncased"]
+    names = ["uk", "us", "all"
+             ]
+    train_sets = ["train_set_uk.json",
+                  "train_set_us.json", "train_set_all.json"
+                  ]
+    test_sets = ["test_set_uk.json", "test_set_us.json", "test_set_all.json"
+                 ]
+
     args_packs = []
     for model_name in model_names:
+        # standard models
         for name, train_set, test_set in zip(names, train_sets, test_sets):
-            args_packs.append({"name" : name, "train_set" : train_set, "test_set" : test_set, "model_name" : model_name})
-        
+            args_packs.append({
+                "name" : name, "train_set" : train_set,
+                "test_set" : test_set, "model_name" : model_name
+            })
+        if not TRAIN:
+            # cross testing: do all the combinations.
+            # only need the name and the test set.
+            cases = [
+                ("us", "test_set_uk.json"),
+                ("us", "test_set_all.json"),
+                ("us", "new_test_set.json"),
+                ("uk", "test_set_us.json"),
+                ("uk", "test_set_all.json"),
+                ("uk", "new_test_set.json"),
+                ("all", "test_set_uk.json"),
+                ("all", "test_set_us.json"),
+                ("all", "new_test_set.json"),
+            ]
+            for name, test_set in cases:
+                train_set = f"test_set_{name}.json"
+                args_packs.append({
+                    "name" : name, "train_set" : train_set,
+                    "test_set" : test_set, "model_name" : model_name
+                })
+    # first level: type of model and what it was trained on
+    # second level: name of test set
+    predictions = {}
+    labels = {}
+    losses = {}
+    accuracies = {}
     for args_pack in args_packs:
-        bulk_eval(
+        tag = f"{args_pack['name']}_{args_pack['model_name']}"
+
+        actual, expected, testloss, test_acc = bulk_eval(
             args_pack = args_pack,
-            epochs = 50)
+            epochs = 50,
+            train = TRAIN,
+            # where to read the saved results from
+            # if we are not training
+            results_dir = '../results2')
+        test_set_tag = args_pack['test_set'].replace('.json', '')
+        # the index of these Series is not meaningful, it is just the
+        # index number of the data item.
+        # Both are matched
+        predictions[(tag, test_set_tag)] = pd.Series(actual)
+        labels[(tag, test_set_tag)] = pd.Series(expected)
+        losses[(tag, test_set_tag)] = float(testloss.cpu().numpy())
+        accuracies[(tag, test_set_tag)] = test_acc
+
+    results_file = pd.HDFStore('results.hdf5', 'w')
+    results_file['predictions'] = pd.DataFrame(predictions)
+    results_file['labels'] = pd.DataFrame(labels)
+    results_file['losses'] = pd.Series(losses)
+    results_file['accuracies'] = pd.Series(accuracies)
+    results_file.close()
