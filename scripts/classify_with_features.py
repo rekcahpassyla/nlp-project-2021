@@ -1,5 +1,6 @@
 #%%
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, \
+    BertConfig
 import torch
 
 import sys
@@ -49,9 +50,10 @@ class BertPlus(nn.Module):
     def __init__(self, bert_type):
         super(BertPlus, self).__init__()
         self.bert = BertModel.from_pretrained(bert_type)
-        self.dropout = nn.Dropout(0.5)
+        self.bertcfg = BertConfig.from_pretrained(bert_type)
+        self.dropout = nn.Dropout(self.bertcfg.hidden_dropout_prob)
         # This layer will have 1 extra input which is the feature (there's only one at the moment)
-        self.combiner = nn.Linear(769, 256)
+        self.combiner = nn.Linear(self.bertcfg.hidden_size + 1, 256)
         self.classifier = nn.Linear(256, 2)
 
     def forward(self, ids, attention_mask, labels, features):
@@ -223,13 +225,19 @@ if __name__ == "__main__":
     TRAIN = True
 
     model_names = [#"bert-base-uncased",
-                   "distilbert-base-uncased"]
-    names = ["uk", #"us", "all"
+                   "distilbert-base-uncased"
+                   ]
+    names = ["uk",
+             #"us",
+             #"all"
              ]
     train_sets = ["train_set_uk_features.json",
-                  #"train_set_us_features.json", "train_set_all_features.json"
+                  #"train_set_us_features.json",
+                  # "train_set_all_features.json"
                   ]
-    test_sets = ["test_set_uk_features.json", #"test_set_us_features.json", "test_set_all_features.json"
+    test_sets = ["test_set_uk_features.json",
+                 #"test_set_us_features.json",
+                 # "test_set_all_features.json"
                  ]
 
     args_packs = []
