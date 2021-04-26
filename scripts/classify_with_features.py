@@ -85,7 +85,10 @@ def evalmodel(model, loader):
             attention_mask = batch["attention_mask"].to(device)
             labels += batch["labels"].numpy().tolist()
             this_labels = batch["labels"].to(device)
-            outputs = model(input_ids, attention_mask=attention_mask, labels=this_labels)
+            this_features = batch["features"].to(device)
+            outputs = model.forward(
+                input_ids, attention_mask=attention_mask,
+                labels=this_labels, features=this_features)
             this_preds = outputs.logits.argmax(axis=1)
             preds += this_preds.cpu().numpy().tolist()
             loss = outputs[0]
@@ -214,18 +217,18 @@ if __name__ == "__main__":
     # If you have a problem with your GPU, set this to "cpu" manually
     device = torch.device("cuda:0" if GPU else "cpu")
 
-    device = "cpu"
+    #device = "cpu"
 
     TRAIN = True
 
     model_names = [#"bert-base-uncased",
                    "distilbert-base-uncased"]
-    names = ["uk", "us", "all"
+    names = ["uk", #"us", "all"
              ]
     train_sets = ["train_set_uk_features.json",
-                  "train_set_us_features.json", "train_set_all_features.json"
+                  #"train_set_us_features.json", "train_set_all_features.json"
                   ]
-    test_sets = ["test_set_uk_features.json", "test_set_us_features.json", "test_set_all_features.json"
+    test_sets = ["test_set_uk_features.json", #"test_set_us_features.json", "test_set_all_features.json"
                  ]
 
     args_packs = []
@@ -281,7 +284,7 @@ if __name__ == "__main__":
         losses[(tag, test_set_tag)] = float(testloss.cpu().numpy())
         accuracies[(tag, test_set_tag)] = test_acc
 
-    results_file = pd.HDFStore('results.hdf5', 'w')
+    results_file = pd.HDFStore('results_features.hdf5', 'w')
     results_file['predictions'] = pd.DataFrame(predictions)
     results_file['labels'] = pd.DataFrame(labels)
     results_file['losses'] = pd.Series(losses)
