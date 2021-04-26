@@ -5,7 +5,6 @@ import os
 def parse_json(file_name):
     for line in open(file_name, 'r'):
         d = json.loads(line.strip())
-        d['profanity'] = float(d['profanity'])
         yield d
 
 
@@ -13,12 +12,15 @@ def tokenize(text):
     return text.split(' ')
 
 
-def get_data(file_name):
+def get_data(file_name, features=True):
     data = list(parse_json(file_name))
     labels = [x['is_sarcastic'] for x in data]
     headlines = [x['headline'] for x in data]
+    profanity = [x['profanity'] for x in data]
     # tokenized_headlines = [regexp_tokenize(text) for text in headlines]
-    return headlines, labels
+    if not features:
+        return headlines, labels
+    return headlines, labels, profanity
 
 
 
