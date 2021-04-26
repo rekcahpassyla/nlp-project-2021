@@ -172,7 +172,8 @@ def bulk_eval(
             for step, batch in enumerate(train_loader):
 
                 if step % 50 == 0 and not step == 0:
-                    print("  Batch {:>5,}  of  {:>5,}.".format(step, len(train_loader)))
+                    print("{}:{}  Batch {:>5,}  of  {:>5,}.".format(
+                        bert_type, args_pack["train_set"], step, len(train_loader)))
 
                 optim.zero_grad()
                 input_ids = batch["input_ids"].to(device)
@@ -203,7 +204,7 @@ def bulk_eval(
     actual, expected, testloss, test_acc = evalmodel(model, test_loader)
     if not train:
         print(f"Evaluating model {bert_type} from {min_filename} with test set {args_pack['test_set']}")
-    print(f"Test loss: {testloss} Test accuracy: {test_acc}")
+    print(f"{args_pack['test_set']}: Test loss: {testloss} Test accuracy: {test_acc}")
 
     torch.cuda.empty_cache()
     return actual, expected, testloss, test_acc
@@ -283,7 +284,6 @@ if __name__ == "__main__":
         labels[(tag, test_set_tag)] = pd.Series(expected)
         losses[(tag, test_set_tag)] = float(testloss.cpu().numpy())
         accuracies[(tag, test_set_tag)] = test_acc
-
     results_file = pd.HDFStore('results_features.hdf5', 'w')
     results_file['predictions'] = pd.DataFrame(predictions)
     results_file['labels'] = pd.DataFrame(labels)
