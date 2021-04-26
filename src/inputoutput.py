@@ -4,7 +4,9 @@ import os
 
 def parse_json(file_name):
     for line in open(file_name, 'r'):
-        yield json.loads(line.strip())
+        d = json.loads(line.strip())
+        d['profanity'] = float(d['profanity'])
+        yield d
 
 
 def tokenize(text):
