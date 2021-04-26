@@ -27,7 +27,7 @@ for fn in files:
             headline_orig = headline.replace("f**k", "fuck")
             headline_orig = headline_orig.replace("c**t", "cunt")
             prob = predict_prob([headline_orig])
-            out = dict(headline=headline, is_sarcastic=label, profanity=str(prob[0]))
+            out = dict(headline=headline, is_sarcastic=label, profanity=prob[0])
             json.dump(out, fh)
             fh.write("\n")
 
