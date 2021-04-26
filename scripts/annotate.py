@@ -15,8 +15,7 @@ basedir = '../datasets'
 
 files = os.listdir(basedir)
 
-#for fn in files:
-for fn in ['new_test_set.json']:
+for fn in files:
     if not fn.endswith('.json') or fn.endswith('_features.json'):
         continue
     tag, _ = fn.split(".")
@@ -24,7 +23,10 @@ for fn in ['new_test_set.json']:
     headlines, labels = io.get_data(os.path.join(basedir, fn))
     with open(featurefn, 'w') as fh:
         for headline, label in zip(headlines, labels):
-            prob = predict_prob([headline])
+            # replace f**k and c**t with their actual words before running prob
+            headline_orig = headline.replace("f**k", "fuck")
+            headline_orig = headline_orig.replace("c**t", "cunt")
+            prob = predict_prob([headline_orig])
             out = dict(headline=headline, is_sarcastic=label, profanity=str(prob[0]))
             json.dump(out, fh)
             fh.write("\n")
