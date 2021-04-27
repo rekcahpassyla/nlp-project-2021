@@ -45,20 +45,74 @@ class SarcasmFeaturesDataset(torch.utils.data.Dataset):
         return len(self.labels)
 
 
+# Bert and Distilbert have different internals
+class DistilBertPlus(nn.Module):
+    def __init__(self, bert_type):
+        assert bert_type.startswith('distilbert')
+        super(DistilBertPlus, self).__init__()
+        self.bert_type = bert_type
+        self.bert = AutoModel.from_pretrained(bert_type)
+        self.bertcfg = AutoConfig.from_pretrained(bert_type)
+        config = self.bertcfg
+        self.pre_classifier = nn.Linear(config.dim, config.dim)
+        self.combiner = nn.Linear(config.dim + 1, config.dim)
+        # this is where the extra item comes in
+        self.classifier = nn.Linear(config.dim, 2)
+        self.dropout = nn.Dropout(config.seq_classif_dropout)
+
+        # follow the default
+        for module in (self.pre_classifier, self.combiner, self.classifier):
+            module.weight.data.normal_(mean=0.0, std=config.initializer_range)
+            if module.bias is not None:
+                module.bias.data.zero_()
+
+    def forward(self, input_ids, attention_mask, labels, features):
+        distilbert_output = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask        )
+        hidden_state = distilbert_output[0]  # (bs, seq_len, dim)
+        pooled_output = hidden_state[:, 0]  # (bs, dim)
+        pooled_output = self.pre_classifier(pooled_output)  # (bs, dim)
+        pooled_output = nn.ReLU()(pooled_output)  # (bs, dim)
+        pooled_output = self.dropout(pooled_output)  # (bs, dim)
+        next_in = torch.hstack([torch.unsqueeze(features, dim=0).T, pooled_output])
+        next_out = self.combiner(next_in)
+        logits = self.classifier(next_out)  # (bs, num_labels)
+        loss_fct = nn.CrossEntropyLoss()
+        loss = loss_fct(logits.view(-1, 2), labels.view(-1))
+
+        return SequenceClassifierOutput(
+            loss=loss,
+            logits=logits,
+            hidden_states=distilbert_output.hidden_states,
+            attentions=distilbert_output.attentions,
+        )
+
+
 class BertPlus(nn.Module):
     def __init__(self, bert_type):
         super(BertPlus, self).__init__()
+        self.bert_type = bert_type
         self.bert = AutoModel.from_pretrained(bert_type)
         self.bertcfg = AutoConfig.from_pretrained(bert_type)
         self.dropout = nn.Dropout(self.bertcfg.hidden_dropout_prob)
         # This layer will have 1 extra input which is the feature (there's only one at the moment)
-        self.combiner = nn.Linear(self.bertcfg.hidden_size + 1, 256)
-        self.classifier = nn.Linear(256, 2)
+        self.combiner = nn.Linear(self.bertcfg.hidden_size + 1, self.bertcfg.hidden_size)
+        self.classifier = nn.Linear(self.bertcfg.hidden_size, 2)
 
-    def forward(self, ids, attention_mask, labels, features):
-        outputs = self.bert(ids, attention_mask=attention_mask),
-        outputs = outputs[0]
-        pooled_output = outputs.pooler_output
+        # follow the default
+        for module in (self.combiner, self.classifier):
+            module.weight.data.normal_(mean=0.0, std=self.bertcfg.initializer_range)
+            if module.bias is not None:
+                module.bias.data.zero_()
+
+    def forward(self, input_ids, attention_mask, labels, features):
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+        )
+
+        pooled_output = outputs[1]
         pooled_output = self.dropout(pooled_output)
         next_in = torch.hstack([torch.unsqueeze(features, dim=0).T, pooled_output])
         next_out = self.combiner(next_in)
@@ -138,8 +192,10 @@ def bulk_eval(
     # Pretrained models come with different heads.
     # AutoModelForSequenceClassification consists of Bert + dense layer + softmax
     # so we don"t need to add any of those, we can just use the output direct
-    #model = AutoModelForSequenceClassification.from_pretrained(bert_type)
-    model = BertPlus(bert_type)
+    if bert_type.startswith('distilbert'):
+        model = DistilBertPlus(bert_type)
+    else:
+        model = BertPlus(bert_type)
 
     train_encodings = tokenizer(train_text, truncation=True, padding=True)
     val_encodings = tokenizer(val_text, truncation=True, padding=True)
@@ -223,8 +279,8 @@ if __name__ == "__main__":
 
     TRAIN = True
 
-    model_names = [#"bert-base-uncased",
-                   "distilbert-base-uncased"
+    model_names = ["bert-base-uncased",
+                   #"distilbert-base-uncased"
                    ]
     names = ["uk",
              #"us",
