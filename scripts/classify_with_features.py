@@ -1,6 +1,5 @@
 #%%
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, \
-    BertConfig
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 
 import sys
@@ -17,10 +16,10 @@ import torch.nn as nn
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 import transformers
-from transformers import AutoModel, BertTokenizerFast,  BertForSequenceClassification
+from transformers import AutoModel, AutoConfig, BertTokenizerFast,  BertForSequenceClassification
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 
-from transformers import AdamW, BertModel
+from transformers import AdamW
 
 from sklearn.utils.class_weight import compute_class_weight
 
@@ -49,8 +48,8 @@ class SarcasmFeaturesDataset(torch.utils.data.Dataset):
 class BertPlus(nn.Module):
     def __init__(self, bert_type):
         super(BertPlus, self).__init__()
-        self.bert = BertModel.from_pretrained(bert_type)
-        self.bertcfg = BertConfig.from_pretrained(bert_type)
+        self.bert = AutoModel.from_pretrained(bert_type)
+        self.bertcfg = AutoConfig.from_pretrained(bert_type)
         self.dropout = nn.Dropout(self.bertcfg.hidden_dropout_prob)
         # This layer will have 1 extra input which is the feature (there's only one at the moment)
         self.combiner = nn.Linear(self.bertcfg.hidden_size + 1, 256)
@@ -220,7 +219,7 @@ if __name__ == "__main__":
     # If you have a problem with your GPU, set this to "cpu" manually
     device = torch.device("cuda:0" if GPU else "cpu")
 
-    #device = "cpu"
+    device = "cpu"
 
     TRAIN = True
 
