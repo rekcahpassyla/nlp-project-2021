@@ -29,6 +29,7 @@ def gen_model_name(modelname):
 
 def gen_test_setname(testfile):
     # convert test_set_all to Combined test set
+    testfile = testfile.replace("_features", '')
     if testfile == 'new_test_set':
         return 'Adversarial'
     loc = testfile.split("_")[-1]
@@ -156,7 +157,7 @@ def process_results(filename='../results/results.hdf5'):
         trained_model, test_set = column
         results.setdefault(trained_model, {})
         # load the test set data into a big list
-        data, lbls = io.get_data(os.path.join('..', 'datasets', f"{test_set}.json"))
+        data, lbls, _ = io.get_data(os.path.join('..', 'datasets', f"{test_set}.json"))
         labels = l[column].dropna()
         assert np.allclose(np.array(lbls), labels.values)
         record = Record(trained_model, test_set,
@@ -169,10 +170,10 @@ def process_results(filename='../results/results.hdf5'):
 
 
 if __name__ == '__main__':
-    records, losses, accuracies = process_results('../results/results.hdf5')
+    records, losses, accuracies = process_results('../results_features/results_features.hdf5')
 
     # sanity checks
-    r = records['us_bert-base-uncased']['test_set_us']
+    r = records['us_bert-base-uncased']['test_set_us_features']
     # by construction this dataset has 1500 positive, 1500 negative examples
     assert r.labels[r.labels==0].size == r.negatives(True) + r.misclassified(label=0).size
     assert r.labels[r.labels==1].size == r.positives(True) + r.misclassified(label=1).size
@@ -191,6 +192,7 @@ if __name__ == '__main__':
         'DistilBERT/Combined',
     ]
     test_sets = ['UK', 'US', 'Combined', 'Adversarial']
+    col_order = ['US', 'UK', 'Combined', 'Adversarial']
     sort_order = [(a1, a2) for a1 in trained_models for a2 in test_sets ]
     counts = {}
     stats = {}
@@ -223,6 +225,10 @@ if __name__ == '__main__':
             index=['False positives', 'False negatives', 'True positives', 'True negatives']
             )
             fps[key] = data
+    accuracies.columns = pd.Index([gen_model_name(name) for name in accuracies.columns])
+    accuracies.index = pd.Index([gen_test_setname(name) for name in accuracies.index])
+    accuracies = accuracies.unstack().reindex(sort_order).T.unstack()
+    accuracies = accuracies[col_order]
     counts = pd.DataFrame(counts).T.reindex(sort_order)
     stats = pd.DataFrame(stats).T.reindex(sort_order)
     fps = pd.DataFrame(fps).T.reindex(sort_order)
